@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rusvire // Ghost Frequency Terminal</title>
+    <style>
+        :root {
+            --primary: #2E6DB4;
+            --primary-light: #5B9FE8;
+            --bg: #060a10;
+            --bg2: #0a1020;
+            --border: #1a3a6a;
+            --danger: #c0392b;
+            --safe: #27ae60;
+            --warn: #c8a84b;
+            --text: #cdd8e8;
+            --muted: #5a7090;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; }
+        body {
+            background: #000;
+            color: var(--primary-light);
+            font-family: "Courier New", monospace;
+            font-size: 15px;
+            line-height: 1.5;
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        /* BOOT */
+        #boot-screen {
+            position: fixed;
+            inset: 0;
+            background: #000;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 20px;
+        }
+        #start-prompt {
+            font-size: 1rem;
+            border: 2px solid var(--primary);
+            padding: 14px 24px;
+            text-transform: uppercase;
+            cursor: pointer;
+            animation: blink 1s infinite;
+            background: rgba(0,0,0,0.8);
+            color: var(--primary-light);
+            letter-spacing: 0.1em;
+        }
+        .boot-logo {
+            font-size: 3rem;
+            font-weight: bold;
+            margin-top: 24px;
+            margin-bottom: 8px;
+            letter-spacing: 0.4em;
+            color: var(--primary-light);
+            text-shadow: 0 0 20px var(--primary);
+            opacity: 0;
+        }
+        #boot-sequence { margin-top: 10px; min-height: 4em; font-size: 0.8rem; color: var(--text); }
+        .boot-line { opacity: 0; }
+        .boot-progress { width: 80%; max-width: 400px; height: 3px; background: #1a2a4a; margin-top: 20px; display: none; overflow: hidden; }
+        .boot-bar { height: 100%; width: 0%; background: var(--primary); box-shadow: 0 0 8px var(--primary); }
+        .fade-out { animation: fadeOut 0.7s forwards; }
+        @keyframes fadeOut { to { opacity: 0; pointer-events: none; } }
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+
+        /* SHELL */
+        .terminal {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            max-width: 980px;
+            margin: 0 auto;
+            width: 100%;
+            border-left: 2px solid var(--border);
+            border-right: 2px solid var(--border);
+            background: var(--bg);
+        }
+        .terminal::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background: repeating-linear-gradient(to bottom, transparent 0, transparent 1px, rgba(0,0,0,0.3) 1px, rgba(0,0,0,0.3) 3px);
+            opacity: 0.15;
+            z-index: 0;
+        }
+
+        /* STATUS BAR */
+        .status-bar {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: #000;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 10px;
+            font-size: 0.7rem;
+        }
+        .status-group { display: flex; gap: 10px; }
+
+        /* HEADER */
+        header {
+            padding: 14px 12px 16px;
+            border-bottom: 2px solid var(--primary);
+            text-align: center;
+            background: var(--bg);
+            position: relative;
+            z-index: 1;
+        }
+        header h1 {
+            font-size: 1.2rem;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            display: inline-block;
+            padding: 5px 14px;
+            border: 1px solid var(--primary);
+            background: #000;
+            color: var(--primary-light);
+            text-shadow: 0 0 6px var(--primary);
+        }
+        header .sub { font-size: 0.7rem; margin-top: 6px; color: var(--text); letter-spacing: 0.15em; }
+        header .tagline { margin-top: 4px; font-size: 0.7rem; color: var(--warn); }
+
+        /* NAV */
+        nav {
+            display: flex;
+            overflow-x: auto;
+            border-bottom: 1px solid var(--border);
+            background: #0a0f1a;
+            z-index: 1;
+            scrollbar-width: none;
+        }
+        nav::-webkit-scrollbar { display: none; }
+        nav button {
+            flex-shrink: 0;
+            background: transparent;
+            border: none;
+            border-right: 1px solid var(--border);
+            color: var(--primary-light);
+            padding: 10px 14px;
+            font-family: inherit;
+            font-size: 0.75rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            cursor: pointer;
+            white-space: nowrap;
+            letter-spacing: 0.08em;
+        }
+        nav button:hover { background: rgba(46,109,180,0.15); }
+        nav button.active { background: var(--primary); color: #000; }
+
+        /* MAIN */
+        main { flex: 1; padding: 12px; overflow-y: auto; position: relative; z-index: 1; }
+        .tab { display: none; }
+        .tab.active { display: block; }
+
+        h2 {
+            font-size: 0.9rem;
+            border-bottom: 1px dashed var(--border);
+            padding-bottom: 4px;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            color: var(--primary-light);
+        }
+        p { font-size: 0.88rem; margin-bottom: 8px; color: var(--text); }
+        ul, ol { margin-left: 18px; margin-bottom: 10px; font-size: 0.88rem; color: var(--text); }
+        li { margin-bottom: 4px; }
+        strong { color: var(--primary-light); }
+
+        /* CARDS */
+        .card {
+            border: 1px solid rgba(46,109,180,0.4);
+            background: rgba(0,0,0,0.5);
+            margin-bottom: 12px;
+        }
+        .card-header {
+            padding: 7px 10px;
+            border-bottom: 1px solid rgba(46,109,180,0.4);
+            background: rgba(46,109,180,0.08);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .card-title { font-size: 0.82rem; font-weight: bold; color: var(--primary-light); text-transform: uppercase; letter-spacing: 0.08em; }
+        .card-body { padding: 10px; }
+
+        .tag {
+            font-size: 0.62rem;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: var(--warn);
+            margin-bottom: 3px;
+        }
+
+        /* GRID */
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; }
+        .mini {
+            border: 1px solid rgba(46,109,180,0.3);
+            background: rgba(0,0,0,0.5);
+            padding: 8px;
+            font-size: 0.84rem;
+        }
+        .mini h3 { font-size: 0.86rem; margin-bottom: 3px; color: var(--primary-light); }
+
+        /* ALERTS */
+        .alert {
+            border: 1px solid var(--danger);
+            background: rgba(192,57,43,0.06);
+            padding: 10px;
+            font-size: 0.84rem;
+            margin: 8px 0;
+            color: var(--text);
+        }
+        .alert-warn {
+            border: 1px solid var(--warn);
+            background: rgba(200,168,75,0.06);
+            padding: 10px;
+            font-size: 0.84rem;
+            margin: 8px 0;
+            color: var(--text);
+        }
+        .hl { background: rgba(46,109,180,0.15); padding: 2px 5px; color: var(--primary-light); }
+
+        /* FACTION TAGS */
+        .ftag {
+            display: inline-block;
+            font-size: 0.65rem;
+            padding: 2px 8px;
+            font-weight: bold;
+            letter-spacing: 0.1em;
+            margin-right: 6px;
+        }
+        .f-hostile { background: rgba(192,57,43,0.2); color: #e74c3c; border: 1px solid rgba(192,57,43,0.4); }
+        .f-caution { background: rgba(200,168,75,0.15); color: var(--warn); border: 1px solid rgba(200,168,75,0.3); }
+        .f-observe { background: rgba(46,109,180,0.15); color: var(--primary-light); border: 1px solid rgba(46,109,180,0.3); }
+        .f-special { background: rgba(90,70,90,0.2); color: #b98bc8; border: 1px solid rgba(150,100,180,0.3); }
+
+        /* COMMS */
+        .freq-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 7px 0;
+            border-bottom: 1px solid rgba(46,109,180,0.2);
+            font-size: 0.85rem;
+        }
+        .freq-row:last-child { border-bottom: none; }
+        .freq-val { color: var(--primary-light); font-weight: bold; font-size: 0.95rem; }
+        .freq-dim { opacity: 0.4; }
+
+        /* AMMO CODES */
+        .ammo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+        .ammo-item { padding: 8px; border-radius: 2px; display: flex; align-items: center; gap: 8px; font-size: 0.82rem; }
+        .ammo-green { background: rgba(39,174,96,0.1); border: 1px solid rgba(39,174,96,0.3); }
+        .ammo-yellow { background: rgba(200,168,75,0.1); border: 1px solid rgba(200,168,75,0.3); }
+        .ammo-red { background: rgba(192,57,43,0.1); border: 1px solid rgba(192,57,43,0.3); }
+        .ammo-black { background: rgba(0,0,0,0.4); border: 1px solid #333; }
+        .adot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+
+        /* MISSION REWARDS */
+        .rewards { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+        .reward-pill { background: rgba(46,109,180,0.12); border: 1px solid rgba(46,109,180,0.3); padding: 4px 10px; font-size: 0.78rem; color: var(--text); }
+        .reward-pill span { color: var(--primary-light); font-weight: bold; }
+
+        /* POPUP */
+        .popup-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.8);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 99999;
+            padding: 16px;
+        }
+        .popup-card {
+            background: #000;
+            border: 2px solid var(--primary);
+            padding: 16px;
+            max-width: 400px;
+            width: 100%;
+            box-shadow: 0 0 20px rgba(46,109,180,0.4);
+        }
+        .popup-card h3 { margin-bottom: 10px; font-size: 0.95rem; color: var(--primary-light); }
+        .popup-close {
+            margin-top: 12px;
+            width: 100%;
+            padding: 8px;
+            border: 1px solid var(--primary);
+            background: rgba(46,109,180,0.1);
+            color: var(--primary-light);
+            text-transform: uppercase;
+            font-size: 0.78rem;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        footer {
+            border-top: 1px solid var(--border);
+            text-align: center;
+            font-size: 0.65rem;
+            padding: 6px;
+            color: var(--muted);
+            background: var(--bg);
+            z-index: 1;
+        }
+
+        @keyframes flicker { 0%{opacity:0.6} 10%{opacity:0.3} 20%{opacity:1} 100%{opacity:1} }
+        .tab.active { animation: flicker 0.25s ease-out; }
+
+        .talon-wrap { display: flex; flex-direction: column; height: calc(100vh - 200px); min-height: 400px; }
+        .talon-header { display: flex; align-items: center; gap: 10px; padding: 0 0 10px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+        .talon-avatar { width: 34px; height: 34px; border-radius: 50%; background: rgba(46,109,180,0.15); border: 1px solid var(--primary); display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; color: var(--primary-light); flex-shrink: 0; }
+        .talon-notice { font-size: 0.75rem; color: var(--muted); background: rgba(46,109,180,0.06); border: 1px solid var(--border); padding: 7px 10px; margin-bottom: 8px; line-height: 1.5; }
+        .quick-prompts { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+        .qp { background: rgba(0,0,0,0.4); border: 1px solid var(--border); padding: 4px 10px; font-size: 0.72rem; color: var(--muted); cursor: pointer; font-family: inherit; text-transform: uppercase; letter-spacing: 0.05em; }
+        .qp:hover { border-color: var(--primary); color: var(--primary-light); }
+        .chat-messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 4px 0; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+        .msg { display: flex; flex-direction: column; max-width: 88%; }
+        .msg.user { align-self: flex-end; align-items: flex-end; }
+        .msg.bot { align-self: flex-start; align-items: flex-start; }
+        .msg-label { font-size: 0.65rem; color: var(--muted); letter-spacing: 0.1em; margin-bottom: 3px; }
+        .msg-bubble { padding: 9px 12px; font-size: 0.84rem; line-height: 1.6; color: var(--text); }
+        .msg.user .msg-bubble { background: rgba(46,109,180,0.12); border: 1px solid rgba(46,109,180,0.25); }
+        .msg.bot .msg-bubble { background: rgba(0,0,0,0.4); border: 1px solid var(--border); }
+        .chat-input-wrap { display: flex; gap: 8px; padding: 8px 0 0; border-top: 1px solid var(--border); margin-top: 8px; }
+        .chat-input { flex: 1; background: rgba(0,0,0,0.5); border: 1px solid var(--border); padding: 9px 12px; color: var(--text); font-family: inherit; font-size: 0.84rem; outline: none; resize: none; }
+        .chat-input:focus { border-color: var(--primary); }
+        .chat-input::placeholder { color: var(--muted); }
+        .chat-send { background: rgba(46,109,180,0.12); border: 1px solid rgba(46,109,180,0.4); padding: 9px 14px; color: var(--primary-light); font-family: inherit; font-size: 0.75rem; cursor: pointer; letter-spacing: 0.08em; }
+        .chat-send:hover { background: rgba(46,109,180,0.25); }
+        .chat-send:disabled { opacity: 0.4; cursor: not-allowed; }
+        .typing { display: flex; gap: 4px; align-items: center; padding: 10px 12px; background: rgba(0,0,0,0.4); border: 1px solid var(--border); align-self: flex-start; }
+        .typing span { width: 6px; height: 6px; border-radius: 50%; background: var(--primary); animation: tdot 1.2s infinite; }
+        .typing span:nth-child(2) { animation-delay: 0.2s; }
+        .typing span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes tdot { 0%,100%{opacity:0.3} 50%{opacity:1} }
+
+        @media (max-width: 600px) {
+            header h1 { font-size: 0.95rem; letter-spacing: 0.1em; }
+            nav button { padding: 8px 10px; font-size: 0.7rem; }
+            .grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="boot-screen">
+    <div id="start-prompt">Tap to initialize Rusvire terminal</div>
+    <div class="boot-logo" id="boot-logo">RUSVIRE</div>
+    <div id="boot-sequence"></div>
+    <div class="boot-progress" id="boot-loader">
+        <div class="boot-bar" id="boot-bar"></div>
+    </div>
+</div>
+
+<div class="terminal">
+    <div class="status-bar">
+        <div class="status-group">
+            <div>FACTION: RUSVIRE</div>
+            <div>OP: GHOST FREQUENCY Y3E2</div>
+        </div>
+        <div class="status-group">
+            <div id="clock">--:--:--</div>
+            <div id="signal">SIG: ▮▮▮▯▯</div>
+        </div>
+    </div>
+
+    <header>
+        <h1>OP: GHOST FREQUENCY // RUSVIRE</h1>
+        <div class="sub">COMMANDER: ALPHA 1 // LUKE BOWER // 17 MAY 2026</div>
+        <div class="tagline">"HOLD FOB BRICK — THORIUM BY 1600 — MAINTAIN NUCLEAR SILOS"</div>
+    </header>
+
+    <nav>
+        <button class="active" onclick="openTab('overview')">Overview</button>
+        <button onclick="openTab('timeline')">Timeline</button>
+        <button onclick="openTab('command')">Command</button>
+        <button onclick="openTab('comms')">Comms</button>
+        <button onclick="openTab('intel')">Intel</button>
+        <button onclick="openTab('orders')">Orders</button>
+        <button onclick="openTab('talon')">TALON AI</button>
+    </nav>
+
+    <main>
+
+        <!-- OVERVIEW -->
+        <section id="overview" class="tab active">
+            <h2>Mission Overview</h2>
+            <p><span class="hl"><strong>Rusvire:</strong> 23 operators. Objectives are Thorium extraction, device control, and maintaining FOB Brick and the Nuclear Silos throughout the op.</span></p>
+
+            <div class="card">
+                <div class="card-header"><span class="card-title">Mission Windows</span></div>
+                <div class="card-body">
+                    <div class="grid">
+                        <div class="mini">
+                            <div class="tag">Side Op · 10:00–16:00</div>
+                            <h3>Thorium Quest</h3>
+                            <p>Scavenge missing mining bot parts, assemble the rig, then acquire demolition package from MERCs to blast the Thorium deposit. Outbid the Nomads.</p>
+                            <div class="rewards">
+                                <div class="reward-pill">QDP <span>500</span></div>
+                                <div class="reward-pill">Thorium <span>80</span></div>
+                                <div class="reward-pill">XP <span>120</span></div>
+                            </div>
+                        </div>
+                        <div class="mini">
+                            <div class="tag">M01 · 10:00–11:30</div>
+                            <h3>Iron Resolve</h3>
+                            <p>Split forces. Alpha negotiates at G.A.M.P. for QHT device location and sweeps Wraith's Hollow, Rust Cathedral, Blackout Ridge. Bravo scavenges bot parts.</p>
+                            <div class="rewards">
+                                <div class="reward-pill">QDP <span>350</span></div>
+                                <div class="reward-pill">XP <span>90</span></div>
+                            </div>
+                        </div>
+                        <div class="mini">
+                            <div class="tag">M02 · 12:30–14:00</div>
+                            <h3>The Iron Hold</h3>
+                            <p>If holding: press blue, move full column, fortify 40 minutes. If not holding: Phase 1 encirclement → Phase 2 suppression → Phase 3 close assault.</p>
+                            <div class="rewards">
+                                <div class="reward-pill">QDP <span>600</span></div>
+                                <div class="reward-pill">XP <span>130</span></div>
+                            </div>
+                        </div>
+                        <div class="mini">
+                            <div class="tag">M03 · 14:30–16:00</div>
+                            <h3>Ghost Protocol</h3>
+                            <p>Enter device frequency into UV5R radio and follow the signal trail in defensive column. Anomalies target anyone on trail. Rig must not be abandoned.</p>
+                            <div class="rewards">
+                                <div class="reward-pill">QDP <span>800</span></div>
+                                <div class="reward-pill">XP <span>150</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="alert-warn">
+                <strong>If Rusvire forgets everything else:</strong><br>
+                1) Hold FOB Brick and the Nuclear Silos.<br>
+                2) Get Thorium Quest parts to the deposit before 16:00.<br>
+                3) Keep at least one element on base at all times.<br>
+                4) Only the Commander may negotiate with MERCs or authorise collaboration.
+            </div>
+        </section>
+
+        <!-- TIMELINE -->
+        <section id="timeline" class="tab">
+            <h2>Op Timeline — 17 May 2026</h2>
+            <div class="card">
+                <div class="card-body">
+                    <div class="freq-row"><span>05:00</span><span class="freq-val" style="color:var(--muted)">Registration · Base Build · Sign-in</span></div>
+                    <div class="freq-row"><span>Before 09:00</span><span class="freq-val" style="color:var(--muted)">Chrono — all weapons checked</span></div>
+                    <div class="freq-row"><span>09:00</span><span class="freq-val" style="color:var(--warn)">Bears Briefing — All SLs</span></div>
+                    <div class="freq-row"><span>10:00+</span><span class="freq-val">Game Start — M01 + Thorium Quest launch</span></div>
+                    <div class="freq-row"><span>11:30</span><span class="freq-val" style="color:var(--danger)">M01 Iron Resolve closes</span></div>
+                    <div class="freq-row"><span>12:30</span><span class="freq-val">M02 The Iron Hold opens</span></div>
+                    <div class="freq-row"><span>14:00</span><span class="freq-val" style="color:var(--danger)">M02 closes</span></div>
+                    <div class="freq-row"><span>14:30</span><span class="freq-val">M03 Ghost Protocol opens</span></div>
+                    <div class="freq-row"><span>16:00</span><span class="freq-val" style="color:var(--danger)">Thorium Quest + M03 close</span></div>
+                    <div class="freq-row"><span>17:00</span><span class="freq-val" style="color:var(--safe)">Game End — Extract to base</span></div>
+                </div>
+            </div>
+            <div class="alert-warn">
+                <strong>Key locations:</strong> Rusvire Base (FOB Brick) SE · Uranium Mine N · Thorium Deposit NW · Rust Cathedral NC · Wraith's Hollow C · Quantum Lab C · Blackout Ridge C · G.A.M.P. SW · Dark Zone W · Bridge 66 NW · Extraction B7 W · Extraction H5 E
+            </div>
+        </section>
+
+        <!-- COMMAND -->
+        <section id="command" class="tab">
+            <h2>Command & Control — 23 Operators</h2>
+
+            <div class="card">
+                <div class="card-header"><span class="card-title">Command Element</span></div>
+                <div class="card-body grid">
+                    <div class="mini">
+                        <div class="tag">Alpha 1 · Commander</div>
+                        <h3 class="clickable" onclick="openPopup('Alpha 1 — Luke Bower', '<p><strong>Role:</strong> Commander, HMG/Rifleman</p><p><strong>Callsign:</strong> Alpha 1</p><p><strong>Command channel:</strong> 462.925 MHz (all units)</p><p>Luke leads all Rusvire elements. Only Alpha 1 may authorise MERC negotiations or collaboration. All SL comms go through Alpha 1.</p>')">Luke Bower ↗</h3>
+                        <p>HMG / Rifleman</p>
+                    </div>
+                    <div class="mini">
+                        <div class="tag">Bravo 1 · 2IC</div>
+                        <h3 class="clickable" onclick="openPopup('Bravo 1 — 2nd in Command', '<p>Megan Timmer (SL · Rifleman)<br>Waldo van Tonder (Rifleman)<br>Liam Serek (Rifleman)<br>Matthew Crawford (Rifleman)</p><p style=&quot;margin-top:8px&quot;><strong>To command:</strong> 462.925 MHz<br><strong>To squads:</strong> Ch. 3</p>')">Megan Timmer ↗</h3>
+                        <p>+ Waldo · Liam · Matthew</p>
+                    </div>
+                    <div class="mini">
+                        <div class="tag">Bravo 2 · 2IC</div>
+                        <h3 class="clickable" onclick="openPopup('Bravo 2 — 2nd in Command', '<p>Kyle Coetzee (SL · Rifleman)<br>Tristan Henning (Rifleman)<br>Dean Bower (LMG/Rifleman)</p><p style=&quot;margin-top:8px&quot;><strong>To command:</strong> 462.925 MHz<br><strong>To squads:</strong> Ch. 3</p>')">Kyle Coetzee ↗</h3>
+                        <p>+ Tristan · Dean Bower</p>
+                    </div>
+                    <div class="mini">
+                        <div class="tag">Foxtrot 1 · Base</div>
+                        <h3 class="clickable" onclick="openPopup('Foxtrot 1 — Base Element', '<p>Naudine Bakkes (SL · Rifleman)<br>+4 operators on base defence rotation</p><p style=&quot;margin-top:8px&quot;><strong>To command:</strong> 462.925 MHz<br><strong>To squads:</strong> 459.000 MHz (Ch. 4)</p>')">Naudine Bakkes ↗</h3>
+                        <p>Base Element · +4 operators</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><span class="card-title">Recon Units</span></div>
+                <div class="card-body grid">
+                    <div class="mini">
+                        <div class="tag">Romeo 1</div>
+                        <h3>Tristan Tappit (SL)</h3>
+                        <p>Sniper · TJ Maritz (Rifleman)</p>
+                    </div>
+                    <div class="mini">
+                        <div class="tag">Romeo 2</div>
+                        <h3>Wynand Strydom (SL)</h3>
+                        <p>Rifleman · Ivan Kleynhans · Ryan</p>
+                    </div>
+                    <div class="mini">
+                        <div class="tag">Romeo 3</div>
+                        <h3>Leslie Hammond (SL)</h3>
+                        <p>Sniper · Waldo van Tonder · Kyle Killian (CQB)</p>
+                    </div>
+                    <div class="mini">
+                        <div class="tag">Romeo 4</div>
+                        <h3>Ilse De Bruyn (SL)</h3>
+                        <p>Rifleman · +2 operators (TBC)</p>
+                    </div>
+                    <div class="mini">
+                        <div class="tag">Romeo 5</div>
+                        <h3>Robby Marais (SL)</h3>
+                        <p>JP · Eddy · +2 operators</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card" style="opacity:0.5">
+                <div class="card-header"><span class="card-title">Not Present This Op</span></div>
+                <div class="card-body">
+                    <p>X-Ray 1 (Heavy Recon) · Delta 1 (Spec. Infantry) · Sierra (Surgical Suppression) · Oscar (QRF) · Echo 1 / Echo 2 (Contact Elements)</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- COMMS -->
+        <section id="comms" class="tab">
+            <h2>Radio Frequencies</h2>
+
+            <div class="card">
+                <div class="card-header"><span class="card-title">All Units — Common Channel</span></div>
+                <div class="card-body">
+                    <div class="freq-row">
+                        <span>Alpha 1 → ALL <span style="color:var(--muted);font-size:0.75rem">(Baofeng 888 Ch.9)</span></span>
+                        <span class="freq-val">462.925 MHz</span>
+                    </div>
+                    <p style="margin-top:8px;font-size:0.8rem">Primary command channel. All units monitor at all times. Designate one comms officer per squad — <strong>cannot be the Squad Leader.</strong></p>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><span class="card-title">Active Unit Channels</span></div>
+                <div class="card-body">
+                    <div class="freq-row"><span>Bravo → Command</span><span class="freq-val">462.925 MHz</span></div>
+                    <div class="freq-row"><span>Bravo → Squads (Ch.3)</span><span class="freq-val">Ch. 3</span></div>
+                    <div class="freq-row"><span style="font-size:0.78rem;color:var(--muted)">Sierra 1</span><span class="freq-val" style="font-size:0.88rem">457.500 MHz</span></div>
+                    <div class="freq-row"><span style="font-size:0.78rem;color:var(--muted)">Sierra 2</span><span class="freq-val" style="font-size:0.88rem">458.500 MHz</span></div>
+                    <div class="freq-row"><span>Foxtrot → Command</span><span class="freq-val">462.925 MHz</span></div>
+                    <div class="freq-row"><span>Foxtrot → Squads (Ch.4)</span><span class="freq-val">459.000 MHz</span></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><span class="card-title">Ammo Status Codes</span></div>
+                <div class="card-body">
+                    <div class="ammo-grid">
+                        <div class="ammo-item ammo-green"><div class="adot" style="background:#27ae60"></div><div><strong style="color:#27ae60">GREEN</strong><br><span style="font-size:0.78rem;color:var(--text)">Full ammo capacity</span></div></div>
+                        <div class="ammo-item ammo-yellow"><div class="adot" style="background:var(--warn)"></div><div><strong style="color:var(--warn)">YELLOW</strong><br><span style="font-size:0.78rem;color:var(--text)">Last 2 magazines</span></div></div>
+                        <div class="ammo-item ammo-red"><div class="adot" style="background:var(--danger)"></div><div><strong style="color:#e74c3c">RED</strong><br><span style="font-size:0.78rem;color:var(--text)">Last magazine</span></div></div>
+                        <div class="ammo-item ammo-black"><div class="adot" style="background:#333;border:1px solid #555"></div><div><strong style="color:var(--muted)">BLACK</strong><br><span style="font-size:0.78rem;color:var(--text)">No ammo</span></div></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card" style="opacity:0.45">
+                <div class="card-header"><span class="card-title">Inactive — Units Not Present</span></div>
+                <div class="card-body">
+                    <div class="freq-row freq-dim"><span>Echo 1</span><span class="freq-val">455.750 MHz</span></div>
+                    <div class="freq-row freq-dim"><span>Echo 2</span><span class="freq-val">456.500 MHz</span></div>
+                    <div class="freq-row freq-dim"><span>X-Ray 1</span><span class="freq-val">462.000 MHz</span></div>
+                    <div class="freq-row freq-dim"><span>X-Ray 2</span><span class="freq-val">463.500 MHz</span></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- INTEL -->
+        <section id="intel" class="tab">
+            <h2>Hostile Forces — Rules of Engagement</h2>
+
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">NATO Nomads</span>
+                    <span class="ftag f-hostile">HOSTILE</span>
+                </div>
+                <div class="card-body">
+                    <p><strong>Armband:</strong> Yellow · <strong>Est. strength:</strong> ~25 · <strong>Possible base:</strong> Grid K11</p>
+                    <p>Will attack our base. On contact: observe and report direction, description, and other details. If Rusvire has superior force — eliminate. Priority: maintain FOB Brick, nuclear silos, and our base.</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Grey Skulls</span>
+                    <span class="ftag f-hostile">HOSTILE</span>
+                </div>
+                <div class="card-body">
+                    <p><strong>Armband:</strong> Red · <strong>Est. strength:</strong> Unknown · <strong>Possible base:</strong> Dark Zone (2 FOBs)</p>
+                    <p>Uncertain alliance status — always maintain situational awareness and be prepared to fire. Intel suggests they will move from Dark Zone through forested area toward Rusvire/Nuclear silos.</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">M.E.R.C.S.</span>
+                    <span class="ftag f-caution">CAUTION</span>
+                </div>
+                <div class="card-body">
+                    <p><strong>Armband:</strong> Green (+ faction colour if contracted)</p>
+                    <p>Presume hostile but do NOT engage unless actively engaged. Relay locations to commander at all times. <strong>Only the Commander or designated representative may negotiate.</strong> Collaborate only with commander clearance.</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Cursed</span>
+                    <span class="ftag f-observe">OBSERVE</span>
+                </div>
+                <div class="card-body">
+                    <p><strong>Armband:</strong> Pink</p>
+                    <div class="alert" style="margin:0">DO NOT TRUST. DO NOT ENGAGE. OBSERVE AND RELAY TO COMMANDER ONLY.</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Anomalies</span>
+                    <span class="ftag f-special">SPECIAL</span>
+                </div>
+                <div class="card-body">
+                    <p><strong>Armband:</strong> None</p>
+                    <p>Do NOT engage directly. Engage at range with primary weapons if solo. In mobs of 5–10 players with melee weapons. <strong>Rifles outside Dark Zone only — melee weapons ONLY inside Dark Zone.</strong></p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ORDERS -->
+        <section id="orders" class="tab">
+            <h2>Standing Orders</h2>
+
+            <div class="card">
+                <div class="card-header"><span class="card-title">📻 Radio Protocol</span></div>
+                <div class="card-body">
+                    <ul>
+                        <li>Radio check when occupying any position — at least one other SL must respond</li>
+                        <li>No reception = no QRF capability. Move positions if no signal</li>
+                        <li>One comms officer per squad — cannot be the Squad Leader</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><span class="card-title">🎯 Hit Rules</span></div>
+                <div class="card-body">
+                    <ul>
+                        <li>Direct round hits only — ricochets don't count. Call "HIT" loudly and raise weapon and hand</li>
+                        <li>5-minute bleed-out timer. Can be revived with bandage (max 2 total)</li>
+                        <li>After 2nd hit: requires combat medic syringe — none present for Rusvire this op, dice roll determines fate (even = alive, odd = dead)</li>
+                        <li>Respawn: 150 paces then sit 30 seconds. Call "Back in!" loudly</li>
+                        <li>If patient is hit while medic is touching them — medic is also hit</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><span class="card-title">👁 Friendly ID & Camouflage</span></div>
+                <div class="card-body">
+                    <ul>
+                        <li><strong>Blue tape on both biceps</strong> — apply before entering the field</li>
+                        <li>Cannot identify target? Check fire. Confirm with battle buddy, unit sniper, or scoped squad member</li>
+                        <li>Best camo: Multicam or Olive. Good: Tan. Avoid: black, pink, red, white, yellow, bright greens</li>
+                        <li>Ghillies welcome. Saronde Valley is rocky ridges, open areas, and eucalyptus forest</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><span class="card-title">💧 Logistics</span></div>
+                <div class="card-body">
+                    <ul>
+                        <li>Minimum 1.5L water per operator — recommended 3L</li>
+                        <li>Ammo check after every contact. Drop spare ammo at base — be aware it can be looted</li>
+                        <li>Current strength: 23 comrades</li>
+                        <li>Inexperienced rental players placed under Alpha 1 / Bravo supervision or base protection</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><span class="card-title">🔒 Capture Protocol</span></div>
+                <div class="card-body">
+                    <ul>
+                        <li>No capturing under-18s. No females over 18 without explicit consent. No medical conditions without consent</li>
+                        <li>Say "you are my captive" and start 30-minute timer. No timing device = invalid capture</li>
+                        <li>Game-related questions only. Captive keeps their phone and radio</li>
+                        <li>Release after 30 minutes — captive takes 150 paces then is fully respawned</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="alert-warn">
+                <strong>Simple rule for everyone:</strong> If you're ever unsure what to do — find Alpha 1 or Bravo 1, stick to them, and ask.
+            </div>
+        </section>
+
+        <!-- TALON -->
+        <section id="talon" class="tab">
+            <div class="talon-wrap">
+                <div class="talon-header">
+                    <div class="talon-avatar">T</div>
+                    <div>
+                        <div style="font-size:0.9rem;font-weight:bold;color:var(--primary-light);letter-spacing:0.1em">TALON</div>
+                        <div style="font-size:0.7rem;color:#27ae60">● Field Support AI · Online</div>
+                    </div>
+                </div>
+                <div class="talon-notice">Full Ghost Frequency briefing + S.L.E. ruleset loaded. Ask anything — hit rules, comms, missions, faction ROE, or what to do in any situation.</div>
+                <div class="quick-prompts">
+                    <button class="qp" onclick="talonAsk('What do I do when I get hit?')">Got hit?</button>
+                    <button class="qp" onclick="talonAsk('What channel does Bravo 1 use to talk to Alpha 1?')">Bravo comms</button>
+                    <button class="qp" onclick="talonAsk('What are the Dark Zone rules?')">Dark Zone</button>
+                    <button class="qp" onclick="talonAsk('Can I engage the Cursed?')">Cursed ROE</button>
+                    <button class="qp" onclick="talonAsk('What are the objectives for M01 Iron Resolve?')">M01 objectives</button>
+                    <button class="qp" onclick="talonAsk('How do I capture an enemy player?')">Capture rules</button>
+                    <button class="qp" onclick="talonAsk('What is the respawn procedure?')">Respawn</button>
+                    <button class="qp" onclick="talonAsk('What does ammo code RED mean?')">Ammo RED</button>
+                </div>
+                <div class="chat-messages" id="chat-messages">
+                    <div class="msg bot">
+                        <div class="msg-label">TALON</div>
+                        <div class="msg-bubble">TALON online. Full Ghost Frequency briefing and S.L.E. ruleset loaded. What do you need, operator?</div>
+                    </div>
+                </div>
+                <div class="chat-input-wrap">
+                    <textarea class="chat-input" id="chat-input" placeholder="Ask TALON anything..." rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();talonSend();}"></textarea>
+                    <button class="chat-send" id="chat-send" onclick="talonSend()">SEND</button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer>
+        RUSVIRE FIELD TERMINAL // ALPHA 1: LUKE BOWER // OP GHOST FREQUENCY Y3E2 // S.L.E.
+    </footer>
+</div>
+
+<div id="popup-overlay" class="popup-overlay" onclick="closePopup(event)">
+    <div id="popup-card" class="popup-card"></div>
+</div>
+
+<script>
+const bootLines = [
+    "[RUSVIRE NET] LINK REQUEST RECEIVED...",
+    "AUTHENTICATING ALPHA 1 CREDENTIALS...",
+    "SYNCING ROSTER (23 OPERATORS)...",
+    "LOADING OP GHOST FREQUENCY PROTOCOLS...",
+    "CONNECTION STABLE. RUSVIRE TERMINAL ONLINE."
+];
+
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function beep(freq, dur=0.08, vol=0.05) {
+    try {
+        if (audioCtx.state === "suspended") audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = "square";
+        osc.frequency.value = freq;
+        gain.gain.value = vol;
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+        osc.stop(audioCtx.currentTime + dur);
+    } catch(e) {}
+}
+
+window.addEventListener("load", () => {
+    const startPrompt = document.getElementById("start-prompt");
+    const logo = document.getElementById("boot-logo");
+    const seq = document.getElementById("boot-sequence");
+    const loader = document.getElementById("boot-loader");
+    const bar = document.getElementById("boot-bar");
+    const screen = document.getElementById("boot-screen");
+
+    startPrompt.addEventListener("click", () => {
+        startPrompt.style.display = "none";
+        logo.style.opacity = "1";
+        beep(900);
+        loader.style.display = "block";
+        setTimeout(() => { bar.style.transition = "width 3s ease-in-out"; bar.style.width = "100%"; }, 100);
+
+        let delay = 300;
+        bootLines.forEach((line, idx) => {
+            setTimeout(() => {
+                const div = document.createElement("div");
+                div.className = "boot-line";
+                div.textContent = line;
+                div.style.opacity = "1";
+                seq.appendChild(div);
+                if (seq.childElementCount > 3) seq.removeChild(seq.firstChild);
+                beep(1100 + idx * 50);
+            }, delay);
+            delay += 500;
+        });
+
+        setTimeout(() => {
+            screen.classList.add("fade-out");
+            setTimeout(() => { screen.style.display = "none"; }, 800);
+        }, 2600);
+    });
+
+    startClock();
+    startSignal();
+});
+
+function startClock() {
+    function tick() { document.getElementById("clock").textContent = new Date().toLocaleTimeString("en-GB", { hour12: false }); }
+    tick();
+    setInterval(tick, 1000);
+}
+
+function startSignal() {
+    const p = ["▮▮▯▯▯","▮▮▮▯▯","▮▮▮▮▯","▮▮▮▮▮"];
+    setInterval(() => { document.getElementById("signal").textContent = "SIG: " + p[Math.floor(Math.random()*p.length)]; }, 4000);
+}
+
+function openTab(id) {
+    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+    document.querySelectorAll("nav button").forEach(b => b.classList.remove("active"));
+    document.getElementById(id).classList.add("active");
+    document.querySelectorAll("nav button").forEach(b => {
+        if ((b.getAttribute("onclick") || "").includes(id)) b.classList.add("active");
+    });
+    beep(1300, 0.05, 0.04);
+}
+
+function openPopup(title, content) {
+    const overlay = document.getElementById("popup-overlay");
+    const card = document.getElementById("popup-card");
+    card.innerHTML = `<h3>${title}</h3>${content}<button class="popup-close" onclick="closePopup()">Close</button>`;
+    overlay.style.display = "flex";
+    beep(1200, 0.06, 0.04);
+}
+
+function closePopup(e) {
+    const overlay = document.getElementById("popup-overlay");
+    if (!e || e.target === overlay) { overlay.style.display = "none"; beep(800, 0.04, 0.03); }
+}
+
+const TALON_KEY = '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';
+const TALON_HISTORY = [];
+const TALON_PROMPT = `You are TALON, a tactical field support AI for Rusvire — a South African airsoft team. Answer questions about their current operation (Ghost Frequency, Y3E2) and the S.L.E. game rules. Keep answers clear, direct, and concise. Calm, professional military tone — like a knowledgeable comms officer. No jargon the player wouldn't know. If something isn't in the briefing, say so and suggest they check with Alpha 1.
+
+=== RUSVIRE BRIEFING — OP GHOST FREQUENCY Y3E2 ===
+DATE: 17 May 2026 | LOCATION: Saronde Valley | FACTION: Rusvire
+TIMELINE: 05:00 Registration. Before 09:00 Chrono. 09:00 Bears Briefing (all SLs). 10:00+ Game Start — M01 + Thorium Quest launch simultaneously. 11:30 M01 closes. 12:30-14:00 M02. 14:30-16:00 M03 + Thorium Quest deadline. 17:00 Game End.
+COMMAND: Alpha 1 (Commander): Luke Bower (HMG/Rifleman). Bravo 1 (2IC): Megan Timmer SL, Waldo van Tonder, Liam Serek, Matthew Crawford. Bravo 2 (2IC): Kyle Coetzee SL, Tristan Henning, Dean Bower (LMG). Romeo 1: Tristan Tappit (Sniper SL), TJ Maritz. Romeo 2: Wynand Strydom SL, Ivan Kleynhans, Ryan. Romeo 3: Leslie Hammond (Sniper SL), Waldo van Tonder, Kyle Killian (CQB). Romeo 4: Ilse De Bruyn SL, +2. Romeo 5: Robby Marais SL, JP, Eddy, +2. Foxtrot 1 (Base): Naudine Bakkes SL, +4. NOT PRESENT: X-Ray 1, Delta 1, Sierra, Oscar, Echo 1 and 2. Total: 23 comrades.
+COMMS: All units common: 462.925 MHz (Baofeng 888 Ch.9). Bravo to command: 462.925 MHz. Bravo to squads: Ch.3. Sierra 1: 457.500 MHz. Sierra 2: 458.500 MHz. Foxtrot to command: 462.925 MHz. Foxtrot to squads: 459.000 MHz (Ch.4). Ammo codes: GREEN=full, YELLOW=last 2 mags, RED=last mag, BLACK=out. One comms officer per squad, not the SL.
+MISSIONS: Thorium Quest (side, 10:00-16:00): Scavenge bot parts, assemble rig, get demolition package from MERCs, blast Thorium deposit. Outbid Nomads. Rewards: 500 QDP, 80 thorium, 120 XP per player. M01 Iron Resolve (10:00-11:30): Alpha to G.A.M.P. for device intel, search cells to Wraith's Hollow/Rust Cathedral/Blackout Ridge. Bravo sweeps for bot parts. Contingency: direct assault if another faction finds device first. Rewards: 350 QDP, 90 XP. M02 The Iron Hold (12:30-14:00): If holding device: press blue, read grid, move full column, enter GM code, fortify 40 min. If not holding: Phase 1 encirclement, Phase 2 suppression, Phase 3 close assault. Rewards: 600 QDP, 130 XP. M03 Ghost Protocol (14:30-16:00): Enter frequency into UV5R radio, follow signal trail in defensive column. Anomalies target anyone on trail. Protect mining rig — must not be abandoned. Rewards: 800 QDP, 150 XP.
+HOSTILE FORCES: NATO Nomads (Yellow armbands): HOSTILE. ~25 operators. Possible base K11. Observe and report on contact, eliminate if superior force. Grey Skulls (Red armbands): HOSTILE. Uncertain alliance. Be prepared to fire. Will move from Dark Zone toward Rusvire/silos. M.E.R.C.S. (Green armbands): Presume hostile, do NOT engage unless engaged first. Only commander may negotiate. Cursed (Pink armbands): DO NOT TRUST. DO NOT ENGAGE. Observe and relay to commander only. Anomalies (No armbands): DO NOT ENGAGE directly. Rifles at range if solo. Melee in groups of 5-10. Rifles outside Dark Zone only, melee ONLY inside Dark Zone.
+HIT RULES: Direct round hit only, ricochets don't count. Call HIT loudly, raise weapon and hand. 5-minute bleed-out. Revive with bandage (max 2) or medic syringe. 2nd hit requires combat medic syringe — NONE present for Rusvire, dice roll determines fate (even=alive, odd=dead). Respawn: 150 paces then sit 30 seconds, call Back in! loudly. If patient hit while medic is touching them, medic is also hit.
+MEDIC: White bandage twice around arm with 3 knots = revivable. Capture enemy bandages after eliminating enemies.
+CAPTURE RULES: No under-18s. No females over 18 without consent. No medical conditions without consent. Say you are my captive and start 30-min timer. No timer = invalid. Game questions only. Captive keeps phone. Release after 30 min, 150 paces, fully respawned.
+FRIENDLY ID: Blue tape on both biceps. CAMO: Best = Multicam/Olive. Good = Tan. Avoid black, pink, red, white, yellow, bright green. WATER: Min 1.5L, recommended 3L.
+KEY LOCATIONS: Rusvire Base (FOB Brick) SE, Uranium Mine N, Thorium Deposit NW, Rust Cathedral NC, Wraith's Hollow C, NATO Nomad Research Base/Quantum Lab C, Blackout Ridge/Server Room C, G.A.M.P. SW, Dark Zone W, Bridge 66 NW, Extraction Tunnel NW, Extraction Point B7 W, Extraction Point H5 E, Burned Forest/Pipe Line CS.
+
+=== S.L.E. OFFICIAL RULES ===
+CLASSES: CQB=400rds+3nades | Rifleman=400rds+2nades | Support=Box mag+4nades | Recon=340rds+2nades.
+COMBAT: Any BB on body/gun/kit = hit. 1st+2nd hit = bandage. 3rd hit = medic syringe. Dice: 2,4,6=revival, 1,3,5=respawn. Respawn: 200 paces, sit 30 sec.
+DARK ZONE: Ranged weapons DO NOT function. Melee only (max 600mm, soft/LARP-safe). Anomalies roam freely inside.
+LOOTING: Body divided into 6 sections. Declare search area. Count to 10. Max 2 search attempts per body.
+EXTRACTION: Items must be extracted to activate. Contact MERC at extraction points. Deploy smoke. Max 5 loot/trap cards per extraction.
+CARDS: Loot (found on field), Skill (max 2 per player, cannot be looted), Trap (activate when searched), Storage (more extraction capacity), Set (bonuses for multiples).
+RAID SYSTEM: Attack enemy bases for resources. Requires M.E.R.C.S. as mediators. Negotiation required first.
+SCALES OF BLADES: One-on-one duels in Dark Zone (melee only) to resolve faction disputes.
+EXILE SYSTEM: M.E.R.C.S. justice — 2-hour survival challenge in hostile zone. Only M.E.R.C.S. can issue EXILE orders.`;
+
+let talonLoading = false;
+
+function talonAsk(text) {
+    document.getElementById('chat-input').value = text;
+    talonSend();
+}
+
+function talonAddMsg(role, text) {
+    const wrap = document.getElementById('chat-messages');
+    const div = document.createElement('div');
+    div.className = 'msg ' + (role === 'user' ? 'user' : 'bot');
+    div.innerHTML = '<div class="msg-label">' + (role === 'user' ? 'YOU' : 'TALON') + '</div><div class="msg-bubble">' + text.replace(/\n/g,'<br>') + '</div>';
+    wrap.appendChild(div);
+    wrap.scrollTop = wrap.scrollHeight;
+}
+
+function talonShowTyping() {
+    const wrap = document.getElementById('chat-messages');
+    const div = document.createElement('div');
+    div.id = 'typing-indicator';
+    div.className = 'msg bot';
+    div.innerHTML = '<div class="msg-label">TALON</div><div class="typing"><span></span><span></span><span></span></div>';
+    wrap.appendChild(div);
+    wrap.scrollTop = wrap.scrollHeight;
+}
+
+function talonRemoveTyping() {
+    const t = document.getElementById('typing-indicator');
+    if (t) t.remove();
+}
+
+async function talonSend() {
+    if (talonLoading) return;
+    const input = document.getElementById('chat-input');
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    talonLoading = true;
+    document.getElementById('chat-send').disabled = true;
+    talonAddMsg('user', text);
+    TALON_HISTORY.push({ role: 'user', content: text });
+    talonShowTyping();
+    beep(1100, 0.05, 0.03);
+    try {
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-api-key': TALON_KEY, 'anthropic-version': '2023-06-01' },
+            body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 1000, system: TALON_PROMPT, messages: TALON_HISTORY })
+        });
+        const data = await res.json();
+        const reply = data.content && data.content[0] ? data.content[0].text : 'Signal lost. Try again, operator.';
+        talonRemoveTyping();
+        talonAddMsg('bot', reply);
+        TALON_HISTORY.push({ role: 'assistant', content: reply });
+        beep(900, 0.05, 0.03);
+    } catch(e) {
+        talonRemoveTyping();
+        talonAddMsg('bot', 'Comms disrupted. Check your connection and try again.');
+    }
+    talonLoading = false;
+    document.getElementById('chat-send').disabled = false;
+}
+</script>
+</body>
+</html>
